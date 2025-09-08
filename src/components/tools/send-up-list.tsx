@@ -1,15 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { collection, doc, getDoc, setDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PlusCircle, Trash2, Printer } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Skeleton } from '../ui/skeleton';
 
 interface ListDefinition {
@@ -29,53 +25,59 @@ const BUILT_INS: ListDefinition[] = [
   { id: 'goodeggs', name: 'Good Eggs List', cols: 2 },
 ];
 
+const LOCAL_STORAGE_KEY = 'sendUpLists';
+
 const naturalCompare = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
 
 export default function SendUpListTool() {
-  const [listDefs, setListDefs] = useState<ListDefinition[]>([]);
+  const [listDefs, setListDefs] = useState<ListDefinition[]>(BUILT_INS);
   const [lists, setLists] = useState<ListData>({});
   const [newListItem, setNewListItem] = useState<{ [id: string]: string }>({});
   const [isLoading, setIsLoading] = useState(true);
 
-  const loadListDefs = useCallback(async () => {
-    const docRef = doc(db, 'sendUp', 'listDefinitions');
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      setListDefs(docSnap.data().defs);
-    } else {
-      await setDoc(docRef, { defs: BUILT_INS });
-      setListDefs(BUILT_INS);
+  useEffect(() => {
+    setIsLoading(true);
+    try {
+      const savedLists = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (savedLists) {
+        const parsedLists: ListData = JSON.parse(savedLists);
+        // Ensure all list definitions exist in the loaded data
+        const allLists: ListData = {};
+        listDefs.forEach(def => {
+          allLists[def.id] = (parsedLists[def.id] || []).sort(naturalCompare);
+        });
+        setLists(allLists);
+      } else {
+        // Initialize with empty lists if nothing in storage
+        const emptyLists: ListData = {};
+        listDefs.forEach(def => {
+          emptyLists[def.id] = [];
+        });
+        setLists(emptyLists);
+      }
+    } catch (e) {
+      console.error("Failed to load send-up lists from localStorage", e);
     }
-  }, []);
-
-  useEffect(() => {
-    loadListDefs();
-  }, [loadListDefs]);
-
-  useEffect(() => {
-    if (listDefs.length === 0) return;
-
-    const unsubscribes = listDefs.map(def => {
-      return onSnapshot(doc(db, 'sendUpLists', def.id), (docSnap) => {
-        const values = docSnap.exists() ? docSnap.data().values || [] : [];
-        setLists(prev => ({ ...prev, [def.id]: values.sort(naturalCompare) }));
-      });
-    });
-
     setIsLoading(false);
-    return () => unsubscribes.forEach(unsub => unsub());
   }, [listDefs]);
 
-  const handleModify = async (action: 'add' | 'remove', listId: string, value: string) => {
+  const updateAndSaveLists = (newLists: ListData) => {
+    setLists(newLists);
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newLists));
+  };
+
+
+  const handleModify = (action: 'add' | 'remove', listId: string, value: string) => {
     if (!value) return;
     const currentList = lists[listId] || [];
     let newList;
     if (action === 'add' && !currentList.includes(value)) {
-      newList = [...currentList, value];
+      newList = [...currentList, value].sort(naturalCompare);
     } else {
       newList = currentList.filter(item => item !== value);
     }
-    await setDoc(doc(db, 'sendUpLists', listId), { values: newList.sort(naturalCompare) });
+    
+    updateAndSaveLists({ ...lists, [listId]: newList });
     setNewListItem(prev => ({...prev, [listId]: ''}));
   };
 

@@ -2,8 +2,6 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import type { PassOnNote, Urgency } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
-import { GripVertical, Trash2, Edit } from 'lucide-react';
+import { Trash2, Edit } from 'lucide-react';
 
 
 const urgencyStyles: Record<Urgency, { bg: string, border: string, text: string }> = {
@@ -22,50 +20,38 @@ const urgencyStyles: Record<Urgency, { bg: string, border: string, text: string 
     high: { bg: 'bg-red-100 dark:bg-red-900/50', border: 'border-red-500', text: 'text-red-700 dark:text-red-300' },
 };
 
-export function PassOnNoteCard({ note }: { note: PassOnNote }) {
+interface PassOnNoteCardProps {
+  note: PassOnNote;
+  onUpdate: (note: PassOnNote) => void;
+  onDelete: (id: string) => void;
+}
+
+export function PassOnNoteCard({ note, onUpdate, onDelete }: PassOnNoteCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editedText, setEditedText] = useState(note.text);
   const { toast } = useToast();
 
-  const handleUpdatePriority = async (newPriority: Urgency) => {
-    const noteRef = doc(db, 'passOnNotes', note.id);
-    try {
-      await updateDoc(noteRef, { urgency: newPriority });
-      toast({ title: "Priority Updated", description: "The note's priority has been changed." });
-    } catch (error) {
-      console.error("Error updating priority:", error);
-      toast({ variant: "destructive", title: "Update Failed", description: "Could not update the priority." });
-    }
+  const handleUpdatePriority = (newPriority: Urgency) => {
+    onUpdate({ ...note, urgency: newPriority });
+    toast({ title: "Priority Updated", description: "The note's priority has been changed." });
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (confirm("Are you sure you want to delete this note?")) {
-      const noteRef = doc(db, 'passOnNotes', note.id);
-      try {
-        await deleteDoc(noteRef);
-        toast({ title: "Note Deleted", description: "The note has been successfully deleted." });
-      } catch (error) {
-        console.error("Error deleting note:", error);
-        toast({ variant: "destructive", title: "Delete Failed", description: "Could not delete the note." });
-      }
+      onDelete(note.id);
+      toast({ title: "Note Deleted", description: "The note has been successfully deleted." });
     }
   };
 
-  const handleEdit = async () => {
+  const handleEdit = () => {
     if (editedText.trim() === '') return;
-    const noteRef = doc(db, 'passOnNotes', note.id);
-    try {
-      await updateDoc(noteRef, { text: editedText.trim() });
-      toast({ title: "Note Updated", description: "The note has been successfully edited." });
-      setIsEditDialogOpen(false);
-    } catch (error) {
-      console.error("Error editing note:", error);
-      toast({ variant: "destructive", title: "Edit Failed", description: "Could not edit the note." });
-    }
+    onUpdate({ ...note, text: editedText.trim() });
+    toast({ title: "Note Updated", description: "The note has been successfully edited." });
+    setIsEditDialogOpen(false);
   }
 
-  const cardDate = note.timestamp && note.timestamp.seconds ? formatDistanceToNow(new Date(note.timestamp.seconds * 1000), { addSuffix: true }) : 'just now';
+  const cardDate = note.timestamp ? formatDistanceToNow(new Date(note.timestamp as any), { addSuffix: true }) : 'just now';
 
   return (
     <Card className={cn("flex flex-col justify-between transition-all duration-300", urgencyStyles[note.urgency].bg, urgencyStyles[note.urgency].border)}>

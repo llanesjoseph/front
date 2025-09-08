@@ -4,10 +4,7 @@ export interface PassOnNote {
   id: string;
   text: string;
   urgency: Urgency;
-  timestamp: {
-    seconds: number;
-    nanoseconds: number;
-  };
+  timestamp: Date;
   completed: boolean;
 }
 

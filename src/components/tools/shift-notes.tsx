@@ -1,8 +1,6 @@
 "use client"
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -31,21 +29,43 @@ type ShiftData = {
     selectedTeam: 'Days' | 'Swing' | 'Grave';
 };
 
+const LOCAL_STORAGE_KEY = 'shiftNotesData';
+
+const defaultTasks = {
+    "Operations": [
+        "Exterior Round with Intercom Check", "Podium Stairwell #6 Round", "Podium Round", "Tower Round",
+        "41st & 42nd floor check #1", "41st & 42nd floor check #2", "Called 706 About Roof Inspection",
+        "Down Reports", "Weekly P.E."
+    ],
+    "Amenities": [
+        "Gym t.v. ON", "Gym t.v. OFF", "5th Floor Amenities Door OPEN", "5th Floor Amenities Door CLOSED",
+        "5th Floor Amenities Round", "Amenities Reservations Completed/Processed"
+    ],
+    "Packages": [
+        "Key Audit", "Podium Package Audit #1", "Podium Package Audit #2", "Tower Package Audit #1",
+        "Tower Package Audit #2", "Outgoing Package Audit", "Gym Audit"
+    ]
+};
+
+const getInitialData = (): ShiftData => {
+    const initialTasksState: { [taskName: string]: TaskState } = {};
+    Object.values(defaultTasks).flat().forEach(task => {
+        initialTasksState[task] = { assignments: [''], timestamp: '--:--', completed: false };
+    });
+    return {
+        teamMembers: [],
+        townshipMembers: [],
+        tasksState: initialTasksState,
+        tasks: defaultTasks,
+        notes: [],
+        selectedTeam: 'Days'
+    };
+};
+
 
 export default function ShiftNotesTool() {
     const [isLoading, setIsLoading] = useState(true);
-    const [shiftData, setShiftData] = useState<ShiftData>({
-        teamMembers: [],
-        townshipMembers: [],
-        tasksState: {},
-        tasks: {
-            "Operations": [],
-            "Amenities": [],
-            "Packages": []
-        },
-        notes: [],
-        selectedTeam: 'Days'
-    });
+    const [shiftData, setShiftData] = useState<ShiftData>(getInitialData());
     
     const [newTeamMember, setNewTeamMember] = useState('');
     const [newTownshipMember, setNewTownshipMember] = useState('');
@@ -60,17 +80,10 @@ export default function ShiftNotesTool() {
     
     const { toast } = useToast();
 
-    const allTasks = Object.values(shiftData.tasks).flat();
-
-    const saveData = useCallback(async (data: Partial<ShiftData>) => {
+    const saveData = useCallback((data: ShiftData) => {
         try {
-            const docRef = doc(db, 'shiftNotes', 'current');
-            const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
-                await updateDoc(docRef, data);
-            } else {
-                await setDoc(docRef, data, { merge: true });
-            }
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
+            setShiftData(data);
         } catch (error) {
             console.error("Error saving shift data:", error);
             toast({ variant: 'destructive', title: 'Error', description: 'Failed to save shift data.' });
@@ -78,13 +91,15 @@ export default function ShiftNotesTool() {
     }, [toast]);
     
     useEffect(() => {
-        const docRef = doc(db, 'shiftNotes', 'current');
-        const unsubscribe = onSnapshot(docRef, (docSnap) => {
-            if (docSnap.exists()) {
-                const data = docSnap.data() as ShiftData;
-                 const currentTasks = data.tasks || { "Operations": [], "Amenities": [], "Packages": [] };
+        setIsLoading(true);
+        try {
+            const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
+            if (savedData) {
+                const data = JSON.parse(savedData) as ShiftData;
+                
+                const currentTasks = data.tasks || defaultTasks;
                 const allCurrentTasks = Object.values(currentTasks).flat();
-
+                
                 const validTasksState: { [taskName: string]: TaskState } = {};
                 allCurrentTasks.forEach(task => {
                     validTasksState[task] = data.tasksState?.[task] || { assignments: [''], timestamp: '--:--', completed: false };
@@ -92,50 +107,24 @@ export default function ShiftNotesTool() {
                 data.tasksState = validTasksState;
                 data.tasks = currentTasks;
                 setShiftData(data);
-            } else {
-                const defaultTasks = {
-                    "Operations": [
-                        "Exterior Round with Intercom Check", "Podium Stairwell #6 Round", "Podium Round", "Tower Round",
-                        "41st & 42nd floor check #1", "41st & 42nd floor check #2", "Called 706 About Roof Inspection",
-                        "Down Reports", "Weekly P.E."
-                    ],
-                    "Amenities": [
-                        "Gym t.v. ON", "Gym t.v. OFF", "5th Floor Amenities Door OPEN", "5th Floor Amenities Door CLOSED",
-                        "5th Floor Amenities Round", "Amenities Reservations Completed/Processed"
-                    ],
-                    "Packages": [
-                        "Key Audit", "Podium Package Audit #1", "Podium Package Audit #2", "Tower Package Audit #1",
-                        "Tower Package Audit #2", "Outgoing Package Audit", "Gym Audit"
-                    ]
-                };
-                 const initialTasksState: { [taskName: string]: TaskState } = {};
-                Object.values(defaultTasks).flat().forEach(task => {
-                    initialTasksState[task] = { assignments: [''], timestamp: '--:--', completed: false };
-                });
-                const initialData = { ...shiftData, tasks: defaultTasks, tasksState: initialTasksState};
-                setShiftData(initialData);
-                saveData(initialData);
             }
-            setIsLoading(false);
-        });
-        return () => unsubscribe();
-    }, [saveData]);
-
+        } catch (e) {
+            console.error("Failed to load data from localStorage", e);
+            setShiftData(getInitialData());
+        }
+        setIsLoading(false);
+    }, []);
 
     const handleAddTeamMember = () => {
         if (newTeamMember && !shiftData.teamMembers.includes(newTeamMember)) {
-            const teamMembers = [...shiftData.teamMembers, newTeamMember];
-            setShiftData({...shiftData, teamMembers});
-            saveData({ teamMembers });
+            saveData({ ...shiftData, teamMembers: [...shiftData.teamMembers, newTeamMember] });
             setNewTeamMember('');
         }
     };
     
     const handleAddTownshipMember = () => {
         if (newTownshipMember && !shiftData.townshipMembers.includes(newTownshipMember)) {
-            const townshipMembers = [...shiftData.townshipMembers, newTownshipMember];
-            setShiftData({...shiftData, townshipMembers});
-            saveData({ townshipMembers });
+            saveData({ ...shiftData, townshipMembers: [...shiftData.townshipMembers, newTownshipMember] });
             setNewTownshipMember('');
         }
     };
@@ -147,8 +136,7 @@ export default function ShiftNotesTool() {
         } else {
             updatedMembers[index] = value;
         }
-        setShiftData({ ...shiftData, teamMembers: updatedMembers });
-        saveData({ teamMembers: updatedMembers });
+        saveData({ ...shiftData, teamMembers: updatedMembers });
     };
 
     const handleTownshipMemberUpdate = (index: number, value: string) => {
@@ -158,30 +146,25 @@ export default function ShiftNotesTool() {
         } else {
             updatedMembers[index] = value;
         }
-        setShiftData({ ...shiftData, townshipMembers: updatedMembers });
-        saveData({ townshipMembers: updatedMembers });
+        saveData({ ...shiftData, townshipMembers: updatedMembers });
     };
 
     const handleSetTeam = (team: 'Days' | 'Swing' | 'Grave') => {
-        const updatedData = { ...shiftData, selectedTeam: team };
-        setShiftData(updatedData);
-        saveData({ selectedTeam: team });
+        saveData({ ...shiftData, selectedTeam: team });
     };
     
     const handleTaskAssignmentChange = (taskName: string, assignmentIndex: number, assignee: string) => {
         const newTasksState = { ...shiftData.tasksState };
         const finalAssignee = assignee === 'unassigned' ? '' : assignee;
         newTasksState[taskName].assignments[assignmentIndex] = finalAssignee;
-        setShiftData({ ...shiftData, tasksState: newTasksState });
-        saveData({ tasksState: newTasksState });
+        saveData({ ...shiftData, tasksState: newTasksState });
     };
 
     const handleCompleteTask = (taskName: string) => {
         const newTasksState = { ...shiftData.tasksState };
         newTasksState[taskName].completed = true;
         newTasksState[taskName].timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        setShiftData({ ...shiftData, tasksState: newTasksState });
-        saveData({ tasksState: newTasksState });
+        saveData({ ...shiftData, tasksState: newTasksState });
     };
 
      const handleAddTask = () => {
@@ -194,8 +177,7 @@ export default function ShiftNotesTool() {
 
         const updatedTasksState = { ...shiftData.tasksState, [newTaskName]: { assignments: [''], timestamp: '--:--', completed: false }};
         
-        setShiftData({ ...shiftData, tasks: updatedTasks, tasksState: updatedTasksState });
-        saveData({ tasks: updatedTasks, tasksState: updatedTasksState });
+        saveData({ ...shiftData, tasks: updatedTasks, tasksState: updatedTasksState });
         setNewTaskName('');
         toast({ title: 'Success', description: 'Task added.' });
     };
@@ -204,9 +186,7 @@ export default function ShiftNotesTool() {
         if (!editingTask || !newTaskName.trim()) return;
 
         const updatedTasks = { ...shiftData.tasks };
-        // Remove from old category
         updatedTasks[editingTask.category] = updatedTasks[editingTask.category].filter(t => t !== editingTask.name);
-        // Add to new category
         updatedTasks[newTaskCategory] = [...updatedTasks[newTaskCategory], newTaskName];
         
         const updatedTasksState = { ...shiftData.tasksState };
@@ -215,9 +195,7 @@ export default function ShiftNotesTool() {
             delete updatedTasksState[editingTask.name];
         }
 
-        setShiftData({ ...shiftData, tasks: updatedTasks, tasksState: updatedTasksState });
-        saveData({ tasks: updatedTasks, tasksState: updatedTasksState });
-
+        saveData({ ...shiftData, tasks: updatedTasks, tasksState: updatedTasksState });
         setNewTaskName('');
         setEditingTask(null);
         toast({ title: 'Success', description: 'Task updated.' });
@@ -232,9 +210,15 @@ export default function ShiftNotesTool() {
         const updatedTasksState = { ...shiftData.tasksState };
         delete updatedTasksState[taskName];
 
-        setShiftData({ ...shiftData, tasks: updatedTasks, tasksState: updatedTasksState });
-        saveData({ tasks: updatedTasks, tasksState: updatedTasksState });
+        saveData({ ...shiftData, tasks: updatedTasks, tasksState: updatedTasksState });
         toast({ title: 'Success', description: 'Task deleted.' });
+    };
+    
+    const resetShift = () => {
+      if (confirm("Are you sure you want to reset the shift data? This action cannot be undone.")) {
+        saveData(getInitialData());
+        toast({ title: 'Success', description: 'Shift has been reset.' });
+      }
     };
 
     const startEditing = (category: string, taskName: string) => {
@@ -331,7 +315,7 @@ export default function ShiftNotesTool() {
                             </div>
                         </SheetContent>
                     </Sheet>
-                    <Button variant="destructive">Reset Shift</Button>
+                    <Button variant="destructive" onClick={resetShift}>Reset Shift</Button>
                 </div>
             </header>
 
@@ -366,7 +350,11 @@ export default function ShiftNotesTool() {
                            {shiftData.teamMembers.map((member, index) => (
                                 <li key={index}>
                                     {editTeam ? (
-                                        <Input value={member} onBlur={(e) => handleTeamMemberUpdate(index, e.target.value)} />
+                                        <Input value={member} onBlur={(e) => handleTeamMemberUpdate(index, e.target.value)} onChange={(e) => {
+                                          const updated = [...shiftData.teamMembers];
+                                          updated[index] = e.target.value;
+                                          setShiftData({...shiftData, teamMembers: updated});
+                                        }}/>
                                     ) : (
                                         <p className="p-2">{member}</p>
                                     )}
@@ -392,7 +380,11 @@ export default function ShiftNotesTool() {
                            {shiftData.townshipMembers.map((member, index) => (
                                 <li key={index}>
                                     {editTownship ? (
-                                         <Input value={member} onBlur={(e) => handleTownshipMemberUpdate(index, e.target.value)} />
+                                         <Input value={member} onBlur={(e) => handleTownshipMemberUpdate(index, e.target.value)}  onChange={(e) => {
+                                          const updated = [...shiftData.townshipMembers];
+                                          updated[index] = e.target.value;
+                                          setShiftData({...shiftData, townshipMembers: updated});
+                                        }}/>
                                     ) : (
                                         <p className="p-2">{member}</p>
                                     )}
@@ -454,5 +446,3 @@ export default function ShiftNotesTool() {
         </div>
     );
 }
-
-    

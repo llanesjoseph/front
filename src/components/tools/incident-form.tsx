@@ -1,11 +1,10 @@
 "use client"
 
 import React, { useState } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import type { Incident } from '@/types';
 import { suggestIncidentLocation } from '@/ai/flows/suggest-incident-location';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -30,7 +29,7 @@ const formSchema = z.object({
 });
 
 type IncidentFormProps = {
-    onSubmitted: () => void;
+    onSubmitted: (incident: Omit<Incident, 'id'>) => void;
     locations: string[];
 }
 
@@ -57,7 +56,7 @@ export default function IncidentForm({ onSubmitted, locations }: IncidentFormPro
     const location = values.location === 'Custom' ? values.customLocation : values.location;
 
     try {
-      await addDoc(collection(db, 'incidents'), {
+      const newIncident: Omit<Incident, 'id'> = {
         dateObj: new Date(values.startTime),
         timeCalled: values.startTime,
         timeArrived: values.arrivalTime,
@@ -65,11 +64,11 @@ export default function IncidentForm({ onSubmitted, locations }: IncidentFormPro
         location: location,
         resolutionTime: values.resolutionTime,
         resolutionDescription: values.resolutionDescription,
-        timestamp: serverTimestamp(),
-      });
+        timestamp: new Date(),
+      };
+      onSubmitted(newIncident);
       toast({ title: 'Success', description: 'Incident logged successfully.' });
       form.reset();
-      onSubmitted();
     } catch (error) {
       console.error("Error submitting incident:", error);
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to log incident.' });

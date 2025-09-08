@@ -1,8 +1,6 @@
 "use client"
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import type { Incident } from '@/types';
 import { parseCSVData, historicalDataCSV } from '@/lib/incident-data';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,6 +12,7 @@ import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Tooltip, L
 import { Skeleton } from '../ui/skeleton';
 
 const COLORS = ['#3498DB', '#2C3E50', '#E74C3C', '#F1C40F', '#9B59B6', '#1ABC9C', '#E67E22'];
+const LOCAL_STORAGE_KEY = 'incidents';
 
 export default function IncidentLogTool() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -22,32 +21,38 @@ export default function IncidentLogTool() {
   const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
+    setIsLoading(true);
     const legacyData = parseCSVData(historicalDataCSV);
-    const q = query(collection(db, 'incidents'), orderBy('dateObj', 'desc'));
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const liveData: Incident[] = [];
-      snapshot.forEach(doc => {
-        const data = doc.data();
-        liveData.push({
-          id: doc.id,
-          ...data,
-          dateObj: data.dateObj.toDate(),
-        } as Incident);
-      });
-      
-      const combined = [...liveData, ...legacyData].sort((a,b) => b.dateObj.getTime() - a.dateObj.getTime());
-      setIncidents(combined);
-      setIsLoading(false);
-    }, (error) => {
-        console.error("Error fetching incidents:", error);
-        // If there's an error (e.g. permissions), load legacy data at least
-        setIncidents(legacyData.sort((a,b) => b.dateObj.getTime() - a.dateObj.getTime()));
-        setIsLoading(false);
-    });
-
-    return () => unsubscribe();
+    
+    let localData: Incident[] = [];
+    try {
+      const savedIncidents = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (savedIncidents) {
+        localData = JSON.parse(savedIncidents).map((inc: Incident) => ({
+          ...inc,
+          dateObj: new Date(inc.dateObj),
+        }));
+      }
+    } catch(e) {
+      console.error("Failed to parse incidents from localStorage", e);
+    }
+    
+    const combined = [...localData, ...legacyData].sort((a,b) => b.dateObj.getTime() - a.dateObj.getTime());
+    setIncidents(combined);
+    setIsLoading(false);
   }, []);
+
+  const onSubmitted = (newIncident: Omit<Incident, 'id'>) => {
+    const incidentWithId = { ...newIncident, id: new Date().toISOString() };
+    const newIncidents = [incidentWithId, ...incidents];
+    newIncidents.sort((a,b) => b.dateObj.getTime() - a.dateObj.getTime());
+    setIncidents(newIncidents);
+
+    const localData = newIncidents.filter(i => !i.isLegacy);
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(localData));
+    
+    setShowForm(false);
+  }
 
   const summaryStats = useMemo(() => {
     const now = new Date();
@@ -154,7 +159,7 @@ export default function IncidentLogTool() {
         </Button>
       </header>
       
-      {showForm && <IncidentForm onSubmitted={() => setShowForm(false)} locations={Array.from(new Set(incidents.map(i => i.location).filter(Boolean) as string[]))} />}
+      {showForm && <IncidentForm onSubmitted={onSubmitted} locations={Array.from(new Set(incidents.map(i => i.location).filter(Boolean) as string[]))} />}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
