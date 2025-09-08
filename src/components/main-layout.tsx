@@ -29,6 +29,7 @@ import CourierTrackerTool from './tools/courier-tracker';
 import SendUpListTool from './tools/send-up-list';
 import ContactsTool from './tools/contacts';
 import PlaceholderTool from './tools/placeholder-tool';
+import ShiftNotesTool from './tools/shift-notes';
 
 type Tool = 'passOn' | 'incidentLog' | 'packageCount' | 'sendUp' | 'contacts' | 'shiftNotes' | 'downReport';
 
@@ -38,7 +39,7 @@ const toolConfig = {
   packageCount: { icon: Package, label: "Package Count", component: <CourierTrackerTool /> },
   sendUp: { icon: ArrowUp, label: "Send-Up List", component: <SendUpListTool /> },
   contacts: { icon: BookUser, label: "Contacts", component: <ContactsTool /> },
-  shiftNotes: { icon: ClipboardList, label: "Shift Notes", component: <PlaceholderTool title="Shift Notes" /> },
+  shiftNotes: { icon: ClipboardList, label: "Shift Notes", component: <ShiftNotesTool /> },
   downReport: { icon: TriangleAlert, label: "Down Report", component: <PlaceholderTool title="Down Report" /> },
 };
 
