@@ -19,7 +19,6 @@ export interface Contact {
 export interface Incident {
   id?: string;
   dateObj: Date;
-  dateStr: string;
   timeCalled?: string;
   timeArrived?: string;
   resolutionTime?: string;

@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import IncidentForm from './incident-form';
-import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, PieChart, Pie, Cell } from 'recharts';
+import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Line, PieChart, Pie, Cell } from 'recharts';
 import { Skeleton } from '../ui/skeleton';
 
 const COLORS = ['#3498DB', '#2C3E50', '#E74C3C', '#F1C40F', '#9B59B6', '#1ABC9C', '#E67E22'];
@@ -39,6 +39,11 @@ export default function IncidentLogTool() {
       const combined = [...liveData, ...legacyData].sort((a,b) => b.dateObj.getTime() - a.dateObj.getTime());
       setIncidents(combined);
       setIsLoading(false);
+    }, (error) => {
+        console.error("Error fetching incidents:", error);
+        // If there's an error (e.g. permissions), load legacy data at least
+        setIncidents(legacyData.sort((a,b) => b.dateObj.getTime() - a.dateObj.getTime()));
+        setIsLoading(false);
     });
 
     return () => unsubscribe();
@@ -67,17 +72,17 @@ export default function IncidentLogTool() {
     ];
     
     data.forEach(month => {
-        month[currentYear] = 0;
-        month[lastYear] = 0;
+        month[String(currentYear)] = 0;
+        month[String(lastYear)] = 0;
     })
 
     incidents.forEach(inc => {
       const year = inc.dateObj.getFullYear();
       const month = inc.dateObj.getMonth();
       if (year === currentYear) {
-        data[month][currentYear]++;
+        (data[month][String(currentYear)] as number)++;
       } else if (year === lastYear) {
-        data[month][lastYear]++;
+        (data[month][String(lastYear)] as number)++;
       }
     });
 
@@ -177,8 +182,8 @@ export default function IncidentLogTool() {
                 <YAxis />
                 <Tooltip />
                 <Legend />
-                <Line type="monotone" dataKey={new Date().getFullYear()} stroke="var(--color-chart-1)" />
-                <Line type="monotone" dataKey={new Date().getFullYear() - 1} stroke="var(--color-chart-2)" />
+                <Line type="monotone" dataKey={String(new Date().getFullYear())} stroke="var(--chart-1)" />
+                <Line type="monotone" dataKey={String(new Date().getFullYear() - 1)} stroke="var(--chart-2)" />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
@@ -202,7 +207,7 @@ export default function IncidentLogTool() {
       </div>
       
       <div>
-        <Button onClick={() => setShowHistory(!showHistory)}>
+        <Button onClick={() => setShowHistory(!showHistory)} variant="outline">
           {showHistory ? 'Hide Historical Data' : 'Review Historical Data'}
         </Button>
         {showHistory && (
