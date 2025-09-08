@@ -10,49 +10,38 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import IncidentForm from './incident-form';
 import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Line, PieChart, Pie, Cell } from 'recharts';
 import { Skeleton } from '../ui/skeleton';
+import { usePersistentState } from '@/lib/use-persistent-state';
 
 const COLORS = ['#3498DB', '#2C3E50', '#E74C3C', '#F1C40F', '#9B59B6', '#1ABC9C', '#E67E22'];
 const LOCAL_STORAGE_KEY = 'incidents';
 
 export default function IncidentLogTool() {
-  const [incidents, setIncidents] = useState<Incident[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const legacyData = useMemo(() => parseCSVData(historicalDataCSV), []);
+  const [localIncidents, setLocalIncidents, ready] = usePersistentState<Incident[]>(LOCAL_STORAGE_KEY, []);
   const [showForm, setShowForm] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const isLoading = !ready;
 
   useEffect(() => {
-    setIsLoading(true);
-    const legacyData = parseCSVData(historicalDataCSV);
-    
-    let localData: Incident[] = [];
-    try {
-      const savedIncidents = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (savedIncidents) {
-        localData = JSON.parse(savedIncidents).map((inc: Incident) => ({
-          ...inc,
-          dateObj: new Date(inc.dateObj),
-        }));
-      }
-    } catch(e) {
-      console.error("Failed to parse incidents from localStorage", e);
-    }
-    
-    const combined = [...localData, ...legacyData].sort((a,b) => b.dateObj.getTime() - a.dateObj.getTime());
-    setIncidents(combined);
-    setIsLoading(false);
-  }, []);
+    if (!ready) return;
+    setLocalIncidents((existing) =>
+      existing.map((inc) => ({ ...inc, dateObj: new Date(inc.dateObj) }))
+    );
+  }, [ready, setLocalIncidents]);
+
+  const incidents = useMemo(() => {
+    const combined = [...localIncidents, ...legacyData];
+    combined.sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
+    return combined;
+  }, [localIncidents, legacyData]);
 
   const onSubmitted = (newIncident: Omit<Incident, 'id'>) => {
     const incidentWithId = { ...newIncident, id: new Date().toISOString() };
-    const newIncidents = [incidentWithId, ...incidents];
-    newIncidents.sort((a,b) => b.dateObj.getTime() - a.dateObj.getTime());
-    setIncidents(newIncidents);
-
-    const localData = newIncidents.filter(i => !i.isLegacy);
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(localData));
-    
+    const newLocal = [incidentWithId, ...localIncidents];
+    newLocal.sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
+    setLocalIncidents(newLocal);
     setShowForm(false);
-  }
+  };
 
   const summaryStats = useMemo(() => {
     const now = new Date();

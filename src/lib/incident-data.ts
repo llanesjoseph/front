@@ -158,7 +158,6 @@ export function parseCSVData(csv: string): Incident[] {
 
             incidents.push({
                 dateObj,
-                dateStr,
                 timeCalled: timeCalled || undefined,
                 timeArrived: timeArrived || undefined,
                 resolutionTime: resolutionTime || undefined,
