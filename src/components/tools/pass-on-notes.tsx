@@ -8,6 +8,14 @@ import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { usePersistentState } from '@/lib/use-persistent-state';
 
 const urgencyOrder: Record<Urgency, number> = {
   high: 3,
@@ -18,31 +26,34 @@ const urgencyOrder: Record<Urgency, number> = {
 const LOCAL_STORAGE_KEY = 'passOnNotes';
 
 export default function PassOnNotesTool() {
-  const [notes, setNotes] = useState<PassOnNote[]>([]);
+  const [notes, setNotes, ready] = usePersistentState<PassOnNote[]>(LOCAL_STORAGE_KEY, []);
   const [newNote, setNewNote] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [filter, setFilter] = useState<'all' | Urgency>('all');
+  const isLoading = !ready;
 
   useEffect(() => {
-    try {
-      const savedNotes = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (savedNotes) {
-        const parsedNotes: PassOnNote[] = JSON.parse(savedNotes);
-        // Ensure timestamps are Date objects for sorting
-        parsedNotes.forEach(n => n.timestamp = n.timestamp ? new Date(n.timestamp as any) : new Date());
-        parsedNotes.sort((a, b) => (urgencyOrder[b.urgency] || 0) - (urgencyOrder[a.urgency] || 0) || b.timestamp.getTime() - a.timestamp.getTime());
-        setNotes(parsedNotes);
-      }
-    } catch (error) {
-      console.error("Failed to load notes from localStorage", error);
-      setNotes([]);
-    }
-    setIsLoading(false);
-  }, []);
+    if (!ready) return;
+    setNotes((existing) => {
+      const parsed = existing.map((n) => ({
+        ...n,
+        timestamp: n.timestamp ? new Date(n.timestamp as any) : new Date(),
+      }));
+      parsed.sort(
+        (a, b) =>
+          (urgencyOrder[b.urgency] || 0) - (urgencyOrder[a.urgency] || 0) ||
+          b.timestamp.getTime() - a.timestamp.getTime()
+      );
+      return parsed;
+    });
+  }, [ready, setNotes]);
 
   const updateNotes = (updatedNotes: PassOnNote[]) => {
-    updatedNotes.sort((a, b) => (urgencyOrder[b.urgency] || 0) - (urgencyOrder[a.urgency] || 0) || b.timestamp.getTime() - a.timestamp.getTime());
+    updatedNotes.sort(
+      (a, b) =>
+        (urgencyOrder[b.urgency] || 0) - (urgencyOrder[a.urgency] || 0) ||
+        b.timestamp.getTime() - a.timestamp.getTime()
+    );
     setNotes(updatedNotes);
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedNotes));
   };
 
   const handleAddNote = () => {
@@ -74,9 +85,22 @@ export default function PassOnNotesTool() {
 
   return (
     <div className="flex flex-col h-full gap-6">
-      <header>
-        <h1 className="text-3xl font-headline font-bold">Pass-On Notes</h1>
-        <p className="text-muted-foreground">Real-time notes for shift handovers (Local Storage).</p>
+      <header className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h1 className="text-3xl font-headline font-bold">Pass-On Notes</h1>
+          <p className="text-muted-foreground">Real-time notes for shift handovers (Local Storage).</p>
+        </div>
+        <Select value={filter} onValueChange={(value) => setFilter(value as any)}>
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="Filter" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All</SelectItem>
+            <SelectItem value="high">High</SelectItem>
+            <SelectItem value="medium">Medium</SelectItem>
+            <SelectItem value="low">Low</SelectItem>
+          </SelectContent>
+        </Select>
       </header>
 
       <div className="grid md:grid-cols-3 gap-6">
@@ -86,15 +110,17 @@ export default function PassOnNotesTool() {
                 Array.from({ length: 6 }).map((_, index) => (
                   <Card key={index}><CardContent className="p-6"><Skeleton className="h-24 w-full" /></CardContent></Card>
                 ))
-              ) : notes.length > 0 ? (
-                notes.map((note) => (
-                  <PassOnNoteCard 
-                    key={note.id} 
-                    note={note} 
+              ) : notes.filter(n => filter === 'all' || n.urgency === filter).length > 0 ? (
+                notes
+                  .filter(n => filter === 'all' || n.urgency === filter)
+                  .map((note) => (
+                  <PassOnNoteCard
+                    key={note.id}
+                    note={note}
                     onUpdate={handleNoteUpdate}
                     onDelete={handleNoteDelete}
                   />
-                ))
+                  ))
               ) : (
                 <div className="md:col-span-2 lg:col-span-3 text-center py-10">
                   <p className="text-muted-foreground">No active pass-on notes.</p>
