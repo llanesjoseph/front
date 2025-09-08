@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -72,7 +73,7 @@ export default function CourierTrackerTool() {
   useEffect(() => {
     setIsClient(true);
     loadData();
-  }, [loadData]);
+  }, [isOutgoing]);
   
   const saveData = (newCounts: Counts) => {
     if (currentView !== 'current') return;
@@ -162,7 +163,7 @@ export default function CourierTrackerTool() {
         setCounts(isOutgoing ? initializeCounts(archive.countsOutgoing) : initializeCounts(archive.countsIncoming));
       }
     }
-  }, [currentView, isOutgoing, archivedWeeks]);
+  }, [currentView, isOutgoing, archivedWeeks, loadData]);
 
   if (!isClient) {
     return null;
@@ -259,3 +260,5 @@ export default function CourierTrackerTool() {
     </div>
   );
 }
+
+    
