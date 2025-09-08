@@ -162,7 +162,7 @@ export default function CourierTrackerTool() {
         setCounts(isOutgoing ? initializeCounts(archive.countsOutgoing) : initializeCounts(archive.countsIncoming));
       }
     }
-  }, [currentView, isOutgoing, archivedWeeks, loadData]);
+  }, [currentView, isOutgoing, archivedWeeks]);
 
   if (!isClient) {
     return null;
