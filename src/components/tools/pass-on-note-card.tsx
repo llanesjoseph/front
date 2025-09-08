@@ -65,7 +65,7 @@ export function PassOnNoteCard({ note }: { note: PassOnNote }) {
     }
   }
 
-  const cardDate = note.timestamp ? formatDistanceToNow(new Date(note.timestamp.seconds * 1000), { addSuffix: true }) : 'just now';
+  const cardDate = note.timestamp && note.timestamp.seconds ? formatDistanceToNow(new Date(note.timestamp.seconds * 1000), { addSuffix: true }) : 'just now';
 
   return (
     <Card className={cn("flex flex-col justify-between transition-all duration-300", urgencyStyles[note.urgency].bg, urgencyStyles[note.urgency].border)}>
