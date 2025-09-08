@@ -148,7 +148,8 @@ export default function ShiftNotesTool() {
     
     const handleTaskAssignmentChange = (taskName: string, assignmentIndex: number, assignee: string) => {
         const newTasksState = { ...shiftData.tasksState };
-        newTasksState[taskName].assignments[assignmentIndex] = assignee;
+        const finalAssignee = assignee === 'unassigned' ? '' : assignee;
+        newTasksState[taskName].assignments[assignmentIndex] = finalAssignee;
         const updatedData = { ...shiftData, tasksState: newTasksState };
         setShiftData(updatedData);
         saveData(updatedData);
@@ -278,10 +279,10 @@ export default function ShiftNotesTool() {
                                             <TableRow key={task} className={taskState.completed ? 'bg-green-100 dark:bg-green-900/30' : ''}>
                                                 <TableCell>{task}</TableCell>
                                                 <TableCell>
-                                                    <Select value={taskState.assignments[0]} onValueChange={(value) => handleTaskAssignmentChange(task, 0, value)}>
+                                                    <Select value={taskState.assignments[0] || 'unassigned'} onValueChange={(value) => handleTaskAssignmentChange(task, 0, value)}>
                                                         <SelectTrigger><SelectValue placeholder="Assign..." /></SelectTrigger>
                                                         <SelectContent>
-                                                            <SelectItem value="">Unassigned</SelectItem>
+                                                            <SelectItem value="unassigned">Unassigned</SelectItem>
                                                             {shiftData.teamMembers.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
                                                         </SelectContent>
                                                     </Select>
